@@ -14,16 +14,3 @@ export interface SelectedElement {
   height: number;
 }
 
-export interface DisplayElement {
-  src: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface AnimationConfig {
-  type: 'vertical' | 'diagonal' | 'chaotic' | 'circular';
-  speed: number;
-  direction: 1 | -1;
-}

@@ -9,7 +9,7 @@ const DEFAULT_ASSETS = {
   background: '/assets/background/white-room.jpeg',
   face: '/assets/face_png/ronaldo.png',
   body: '/assets/body_png/dora.png',
-  text: '/assets/text_png/it-is-i.png',
+  text: '/assets/text_png/text-01.png',
 };
 
 export function StageController() {
@@ -78,7 +78,6 @@ export function StageController() {
         face={finalFace}
         body={finalBody}
         text={finalText}
-        caption=""
         onReset={handleReset}
       />
     );

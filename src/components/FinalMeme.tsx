@@ -16,18 +16,80 @@ const DEFAULT_BODY = '/assets/body_png/dora.png';
 
 type TextPosition = 'bottom-center' | 'bottom-left' | 'bottom-right' | 'side-left' | 'side-right';
 
-function getRandomTextParams(bodyWidth: number) {
+function getTextAnalysis(img: HTMLImageElement): {
+  transparencyRatio: number;
+  density: number;
+  isTextOnly: boolean;
+} {
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  if (!ctx) return { transparencyRatio: 0, density: 0.5, isTextOnly: false };
+
+  c.width = img.width;
+  c.height = img.height;
+  ctx.drawImage(img, 0, 0);
+
+  let data: ImageData;
+  try {
+    data = ctx.getImageData(0, 0, img.width, img.height);
+  } catch {
+    return { transparencyRatio: 0, density: 0.5, isTextOnly: false };
+  }
+
+  const d = data.data;
+  const totalPixels = img.width * img.height;
+  let transparentPixels = 0;
+  let top = img.height, bottom = 0, left = img.width, right = 0;
+
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const alpha = d[(y * img.width + x) * 4 + 3];
+      if (alpha === 0) {
+        transparentPixels++;
+      } else {
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+  }
+
+  const nonTransparentPixels = totalPixels - transparentPixels;
+  const transparencyRatio = transparentPixels / totalPixels;
+  const bboxW = Math.max(1, right - left);
+  const bboxH = Math.max(1, bottom - top);
+  const density = nonTransparentPixels / (bboxW * bboxH);
+  const isTextOnly = transparencyRatio > 0.5 || density < 0.4;
+
+  return { transparencyRatio, density, isTextOnly };
+}
+
+function getRandomTextParams(bodyWidth: number, textAnalysis: { isTextOnly: boolean }) {
   const positions: TextPosition[] = ['bottom-center', 'bottom-left', 'bottom-right', 'side-left', 'side-right'];
   const position = positions[Math.floor(Math.random() * positions.length)];
-  let scale = 0.35 + Math.random() * 1.15;
+  let scale: number;
+
+  if (textAnalysis.isTextOnly) {
+    scale = 2.0 + Math.random() * 2.0;
+  } else {
+    scale = 1.0 + Math.random() * 1.5;
+  }
+
   const stretchX = 0.85 + Math.random() * 0.3;
   const stretchY = 0.85 + Math.random() * 0.3;
   const rotation = (Math.random() - 0.5) * 0.2;
 
   if (bodyWidth > 0) {
     const textSize = 256 * scale;
-    if (textSize > bodyWidth * 1.3) {
-      scale = (bodyWidth * 1.3) / 256;
+    if (textAnalysis.isTextOnly) {
+      if (textSize > bodyWidth * 3.5) {
+        scale = (bodyWidth * 3.5) / 256;
+      }
+    } else {
+      if (textSize > bodyWidth * 2.5) {
+        scale = (bodyWidth * 2.5) / 256;
+      }
     }
   }
 
@@ -222,7 +284,8 @@ export function FinalMeme({ background, body, face, text, onReset }: FinalMemePr
     // === TEXT ===
     const textImg = await loadImage(text);
     if (textImg && !textDrawnRef.current) {
-      const { position, scale, stretchX, stretchY, rotation } = getRandomTextParams(bWidth);
+      const textAnalysis = getTextAnalysis(textImg);
+      const { position, scale, stretchX, stretchY, rotation } = getRandomTextParams(bWidth, textAnalysis);
       let tWidth = size * 0.25 * scale * stretchX;
       let tHeight = size * 0.25 * scale * stretchY;
       let tX = 0;
@@ -250,6 +313,25 @@ export function FinalMeme({ background, body, face, text, onReset }: FinalMemePr
           tY = size * 0.55 + (Math.random() - 0.5) * size * 0.2;
           break;
       }
+
+      // Ensure text fits entirely inside the canvas
+      const padX = Math.abs(Math.sin(rotation)) * tHeight / 2 + 5;
+      const padY = Math.abs(Math.sin(rotation)) * tWidth / 2 + 5;
+      const availW = size - 2 * padX;
+      const availH = size - 2 * padY;
+
+      if (tWidth > availW || tHeight > availH) {
+        const cx = tX + tWidth / 2;
+        const cy = tY + tHeight / 2;
+        const fitScale = Math.min(1, availW / tWidth, availH / tHeight);
+        tWidth *= fitScale;
+        tHeight *= fitScale;
+        tX = cx - tWidth / 2;
+        tY = cy - tHeight / 2;
+      }
+
+      tX = Math.max(padX, Math.min(tX, size - tWidth - padX));
+      tY = Math.max(padY, Math.min(tY, size - tHeight - padY));
 
       ctx.save();
       ctx.translate(tX + tWidth / 2, tY + tHeight / 2);

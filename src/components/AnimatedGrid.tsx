@@ -112,6 +112,40 @@ export function AnimatedGrid({ stage, stageIndex, selectedElements, onSelect }: 
   const animationRef = useRef<number | null>(null);
   const mouseRef = useRef({ x: 0, y: 0 });
   const failedClickRef = useRef(0);
+  const stage3Sounds = useRef<HTMLAudioElement[]>([]);
+  const stage4Sounds = useRef<HTMLAudioElement[]>([]);
+  const stage4ActiveSounds = useRef<HTMLAudioElement[]>([]);
+  const stage4PlayingRef = useRef(false);
+  const stage4HoveredRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const s3 = [
+      '/assets/sound/3_stage/2-3-scream-3stage.mp3',
+      '/assets/sound/3_stage/cartoon-low-pitch-laugh-4stage.mp3',
+      '/assets/sound/3_stage/clang-3stage.mp3',
+      '/assets/sound/3_stage/explotion-4stage.mp3',
+      '/assets/sound/3_stage/fart-firstone.mp3',
+    ];
+    stage3Sounds.current = s3.map(src => {
+      const a = new Audio(src);
+      a.preload = 'auto';
+      return a;
+    });
+
+    const s4 = [
+      '/assets/sound/4_stage/cartoon-low-pitch-laugh-4stage.mp3',
+      '/assets/sound/4_stage/edited-4stage-upd.mp3',
+      '/assets/sound/4_stage/explotion-4stage.mp3',
+      '/assets/sound/4_stage/laugther-cringe-4stage-upd.mp3',
+      '/assets/sound/4_stage/random-sounds-upd.mp3',
+      '/assets/sound/4_stage/tongue-stage4-upd.mp3',
+    ];
+    stage4Sounds.current = s4.map(src => {
+      const a = new Audio(src);
+      a.preload = 'auto';
+      return a;
+    });
+  }, []);
 
   const basePath = STAGE_PATHS[stage];
   const assetsList = ASSETS[stage];
@@ -137,6 +171,15 @@ export function AnimatedGrid({ stage, stageIndex, selectedElements, onSelect }: 
 
   useEffect(() => {
     if (stage === 'body') failedClickRef.current = 0;
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage !== 'text') {
+      stage4ActiveSounds.current = [];
+      return;
+    }
+    const shuffled = [...stage4Sounds.current].sort(() => Math.random() - 0.5);
+    stage4ActiveSounds.current = shuffled.slice(0, 2);
   }, [stage]);
 
   const initializeElements = useCallback(() => {
@@ -174,6 +217,42 @@ export function AnimatedGrid({ stage, stageIndex, selectedElements, onSelect }: 
     if (!mounted || dimensions.width === 0) return;
     initializeElements();
   }, [mounted, stage, stageIndex]);
+
+  const playRandomSound = useCallback((sounds: HTMLAudioElement[]) => {
+    if (sounds.length === 0) return;
+    const idx = Math.floor(Math.random() * sounds.length);
+    const audio = sounds[idx];
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }, []);
+
+  const playStage4Sound = useCallback(() => {
+    if (stage4PlayingRef.current) return;
+    const active = stage4ActiveSounds.current;
+    if (active.length === 0) return;
+    const idx = Math.floor(Math.random() * active.length);
+    const audio = active[idx];
+    audio.currentTime = 0;
+    stage4PlayingRef.current = true;
+    audio.play().catch(() => { stage4PlayingRef.current = false; });
+    audio.onended = () => { stage4PlayingRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (stage !== 'text') {
+      stage4Sounds.current.forEach(a => { a.pause(); a.currentTime = 0; });
+      stage4PlayingRef.current = false;
+      stage4HoveredRef.current.clear();
+    }
+  }, [stage]);
+
+  useEffect(() => {
+    return () => {
+      stage4Sounds.current.forEach(a => { a.pause(); a.currentTime = 0; });
+      stage4PlayingRef.current = false;
+      stage4HoveredRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     if (elements.length === 0 || dimensions.width === 0) return;
@@ -252,27 +331,26 @@ export function AnimatedGrid({ stage, stageIndex, selectedElements, onSelect }: 
     };
     animationRef.current = requestAnimationFrame(animate);
     return () => { if (animationRef.current) cancelAnimationFrame(animationRef.current); };
-  }, [elements.length, stage, dimensions, cols]);
+  }, [elements.length, stage, dimensions, cols, playRandomSound]);
 
   useEffect(() => {
-    if (stage !== 'text') return;
-    const preloadList = [
-      'text-01.png', 'text-02.png', 'text-03.png', 'text-04.png', 'text-05.png',
-      'text-06.png', 'text-07.png', 'text-08.png', 'text-09.png', 'text-10.png',
-      'text-11.png', 'text-12.png', 'text-13.png', 'text-14.png', 'text-15.png',
-      'text-16.png', 'text-17.png', 'text-18.png', 'text-19.png', 'text-20.png',
-      'text-21.png', 'text-22.png', 'text-23.png', 'text-24.png', 'text-25.png',
-      'text-26.png', 'text-27.png', 'text-28.png', 'text-29.png', 'text-30.png',
-      'text-31.png', 'text-32.png', 'text-33.png', 'text-34.png', 'text-35.png',
-      'text-36.png', 'text-37.png', 'text-38.png', 'text-39.png', 'text-40.png',
-      'text-41.png', 'text-42.png', 'text-43.png', 'text-44.png', 'text-45.png',
-      'text-46.png', 'text-47.png', 'text-48.png', 'text-49.png', 'text-50.png',
+    const allJpg = [
+      ...ASSETS.background.map(f => STAGE_PATHS.background + f),
+      ...ASSETS.face.map(f => STAGE_PATHS.face + f),
+      ...ASSETS.body.map(f => STAGE_PATHS.body + f),
+      ...ASSETS.text.map(f => STAGE_PATHS.text + f),
     ];
-    preloadList.forEach(name => {
-      const img = new Image();
-      img.src = '/assets/text_png/' + name;
-    });
-  }, [stage]);
+    allJpg.forEach(src => { const img = new Image(); img.src = src; });
+
+    const textPngs = Array.from({ length: 50 }, (_, i) => `/assets/text_png/text-${String(i + 1).padStart(2, '0')}.png`);
+    textPngs.forEach(src => { const img = new Image(); img.src = src; });
+
+    const facePngs = ASSETS.face.map(f => STAGE_PATHS.face.replace('_jpg', '_png') + f.replace(/\.(jpeg|jpg|webp)$/, '.png'));
+    facePngs.forEach(src => { const img = new Image(); img.src = src; });
+
+    const bodyPngs = ASSETS.body.map(f => STAGE_PATHS.body.replace('_jpg', '_png') + f.replace(/\.(jpeg|jpg)$/, '.png'));
+    bodyPngs.forEach(src => { const img = new Image(); img.src = src; });
+  }, []);
 
   const checkExists = async (src: string | undefined): Promise<boolean> => {
     if (!src) return false;
@@ -305,6 +383,7 @@ export function AnimatedGrid({ stage, stageIndex, selectedElements, onSelect }: 
       const shouldFail = firstClick || Math.random() < 0.4;
       if (shouldFail) {
         failedClickRef.current += 1;
+        playRandomSound(stage3Sounds.current);
         setElements(prev => prev.map(el =>
           el.id === element.id ? { ...el, fading: true } : el
         ));
@@ -321,6 +400,17 @@ export function AnimatedGrid({ stage, stageIndex, selectedElements, onSelect }: 
 
     onSelect({ jpgSrc: element.jpgSrc, pngSrc: finalPng, x: element.x, y: element.y, width: element.width, height: element.height });
   }, [onSelect, stage]);
+
+  const handleStage4HoverEnter = useCallback((el: GridElement) => {
+    if (stage !== 'text' || !el.avoidant) return;
+    if (stage4HoveredRef.current.has(el.id)) return;
+    stage4HoveredRef.current.add(el.id);
+    playStage4Sound();
+  }, [stage]);
+
+  const handleStage4HoverLeave = useCallback((el: GridElement) => {
+    stage4HoveredRef.current.delete(el.id);
+  }, []);
 
   if (!mounted || dimensions.width === 0 || elements.length === 0) {
     return <div ref={containerRef} className="fixed inset-0 bg-white flex items-center justify-center"><div className="text-black font-mono">Loading...</div></div>;
@@ -347,6 +437,8 @@ export function AnimatedGrid({ stage, stageIndex, selectedElements, onSelect }: 
             pointerEvents: el.opacity < 0.01 ? 'none' as const : undefined,
           }}
           onClick={(e) => handleClick(el, e)}
+          onMouseEnter={() => handleStage4HoverEnter(el)}
+          onMouseLeave={() => handleStage4HoverLeave(el)}
         >
           <img src={el.jpgSrc} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false} />
         </div>
